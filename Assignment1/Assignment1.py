@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, abort
-from flask import request
+from flask import Flask, jsonify, abort, request, send_file
 from sqlitedict import SqliteDict
 import hashlib
+import qrcode
+import io
 
 app = Flask(__name__)
 
@@ -45,13 +46,21 @@ def getOrDelete(id):
 def qrCode(id):
     if not id in bookmarksDB:
             abort(404)
-    return '<HTML><h1>QR code:</h1></HTML>'
+    bookmark = bookmarksDB[id]
+    img = qrcode.make(bookmark['url'])
+    return serve_pil_image(img)
 
 @app.route('/api/bookmarks/<id>/stats')
 def stats(id):
     if not id in bookmarksDB:
             abort(404)
     return '<HTML>Should support conditional get</HTML>'
+
+def serve_pil_image(pil_img):
+    img_io = io.BytesIO()
+    pil_img.save(img_io, 'JPEG', quality=70)
+    img_io.seek(0)
+    return send_file(img_io, mimetype='image/jpeg')
 
 if __name__ == '__main__':
     app.run()
