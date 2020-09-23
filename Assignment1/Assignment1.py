@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, abort, request, send_file, Response
+from flask import Flask, jsonify, abort, request, send_file
 from etag_cache import etag_cache
 from sqlitedict import SqliteDict
 import hashlib
