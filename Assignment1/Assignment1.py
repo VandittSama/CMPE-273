@@ -82,6 +82,9 @@ def stats(id):
     latestEtag = bookmark['latest_etag']
     if reqEtag == latestEtag:
         return '', 304
+    reqEtag = request.headers.get(key='ETag')
+    if reqEtag == latestEtag:
+        return '', 304
     checkCache = etag_cache(my_view)
     res = checkCache(latestEtag)
     return res
