@@ -1,10 +1,13 @@
-from flask import Flask, jsonify, abort, request, send_file
+from flask import Flask, jsonify, abort, request, send_file, Response
+from etag_cache import etag_cache
 from sqlitedict import SqliteDict
 import hashlib
 import qrcode
 import io
+import flask_monitoringdashboard as dahsboard
 
 app = Flask(__name__)
+dahsboard.bind(app)
 
 bookmarksDB = SqliteDict('.my_db.sqlite', autocommit=True)
 
@@ -14,6 +17,7 @@ def root():
 
 @app.route('/api')
 def home():
+    bookmarksDB.clear()
     return 'Please enter complete address'
 
 @app.route('/api/bookmarks', methods=['POST'])
@@ -23,13 +27,18 @@ def newBookmark():
     id = hashlib.sha256(request.json['url'].encode('utf-8')).hexdigest()
     if id in bookmarksDB:
         return jsonify({'reason':"The given URL already existed in the system."}), 400
+    
+    etag = str(hashlib.md5(request.json['url'].encode('utf-8')).hexdigest())
     newBookmark = {
         'id' : id,
         'name' : request.json['name'],
         'url' : request.json['url'],
-        'description' : request.json['description']
+        'description' : request.json['description'],
+        'latest_etag' : str(etag)
     }
     bookmarksDB[id] = newBookmark
+    bookmarksDB[str(etag)] = int(0)
+    bookmarksDB.commit
     return jsonify({'ID' : id}), 201 
 
 @app.route('/api/bookmarks/<id>', methods=['GET', 'DELETE'])
@@ -37,8 +46,23 @@ def getOrDelete(id):
     if not id in bookmarksDB:
             abort(404)
     if request.method == 'GET':
-        return jsonify(bookmarksDB[id])
+        bookmark = bookmarksDB[id]
+        latestEtag = str(bookmark['latest_etag'])
+        count = int(bookmarksDB[latestEtag])
+        count = count + 1
+        del bookmarksDB[bookmark['latest_etag']]
+        temp = str(bookmark['url']) + str(count)
+        etag = hashlib.md5(temp.encode('utf-8')).hexdigest()
+        bookmarksDB[etag] = count
+        bookmark['latest_etag'] = etag
+        bookmarksDB[id] = bookmark
+        bookmarksDB.commit
+        del bookmark['latest_etag']
+        return jsonify(bookmark)
     elif request.method == 'DELETE':
+        bookmark = bookmarksDB[id]
+        latestEtag = str(bookmark['latest_etag'])
+        del bookmarksDB[latestEtag]
         del bookmarksDB[id]
         return '', 204
 
@@ -53,8 +77,23 @@ def qrCode(id):
 @app.route('/api/bookmarks/<id>/stats')
 def stats(id):
     if not id in bookmarksDB:
-            abort(404)
-    return '<HTML>Should support conditional get</HTML>'
+        abort(404)
+    reqEtag = request.headers.get(key='If-None-Match')
+    bookmark = bookmarksDB[id]
+    latestEtag = bookmark['latest_etag']
+    if reqEtag == latestEtag:
+        return '', 304
+    checkCache = etag_cache(my_view)
+    res = checkCache(latestEtag)
+    return res
+
+def my_view(latestEtag):
+    yield {
+                'ETag': latestEtag,
+                'Cache-Control': 'max-age=60'
+            }
+    # Make the response
+    yield str(bookmarksDB[latestEtag])
 
 def serve_pil_image(pil_img):
     img_io = io.BytesIO()
