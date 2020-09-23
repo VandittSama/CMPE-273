@@ -127,3 +127,5 @@ dmypy.json
 #databases
 *.db
 *.sqlite
+flask_monitoringdashboard.db
+.my_db.sqlite
