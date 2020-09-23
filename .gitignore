@@ -129,3 +129,4 @@ dmypy.json
 *.sqlite
 flask_monitoringdashboard.db
 .my_db.sqlite
+.DS_Store
