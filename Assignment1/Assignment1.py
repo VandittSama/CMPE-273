@@ -17,7 +17,6 @@ def root():
 
 @app.route('/api')
 def home():
-    bookmarksDB.clear()
     return 'Please enter complete address'
 
 @app.route('/api/bookmarks', methods=['POST'])
